@@ -1368,7 +1368,16 @@ class RuneLiteClient(GenericWindow):
 
 
 
-
+    def debug_sectors(self) -> Image.Image:
+        sc = self.get_screenshot()
+        sectors = [
+            self.sectors.chat,
+            self.sectors.toolplane
+        ]
+        for sector in sectors:
+            sc = sector.debug_draw(sc)
+            
+        return sc
         
         
 
