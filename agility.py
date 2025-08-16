@@ -66,7 +66,8 @@ def main():
 def click_tile(tile_color, action):
     box = None
     try: 
-        box = find_color_box(client.get_screenshot(), tile_color, tol=40)
+        box = find_color_box(client.get_screenshot(), tile_color, tol=10)
+        #box = box.scale_px(-8)
     except: 
         print(f"Failed to find tile {tile_color}")
         return False

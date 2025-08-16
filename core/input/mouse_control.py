@@ -19,6 +19,7 @@ from core.control import ScriptControl
 from enum import Enum
 from typing import Tuple
 
+pyautogui.FAILSAFE = False
 control = ScriptControl()
 
 class ClickType(Enum):
