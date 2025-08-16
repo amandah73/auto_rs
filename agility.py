@@ -81,8 +81,12 @@ def get_color_tile(tile_color, tol=40):
         return None
 
 def click_tile(tile_color, action):
-    box = get_color_tile(tile_color)
-    if not box:
+    box = None
+    try: 
+        box = find_color_box(client.get_screenshot(), tile_color, tol=10)
+        #box = box.scale_px(-8)
+    except: 
+        print(f"Failed to find tile {tile_color}")
         return False
     try:
         client.smart_click_match(
