@@ -124,6 +124,12 @@ class GenericWindow:
         threading.Thread(target=_loop, daemon=True).start()
         return stop_evt  # Caller can call .set() to stop
 
+    def on_resize(self):
+        """
+        Default resize handler. Can be overridden by subclasses.
+        """
+        self.log.info('On resize called, but no handler defined.')
+
     @property
     def screenshot(self) -> Image.Image:
         """
@@ -549,7 +555,8 @@ class RuneLiteClient(GenericWindow):
             click_cnt: int = 1,
             min_confidence=0.97,
             min_click_interval: float = 0.3,
-            crop: Tuple[int] = None
+            crop: Tuple[int] = None,
+            center: bool = False
     ):
         
         match = self.find_item(
@@ -559,6 +566,7 @@ class RuneLiteClient(GenericWindow):
             crop=crop
         )
         
+        if center: match = match.get_center()
             
         self.click(
             match, click_cnt=click_cnt, 
@@ -863,9 +871,12 @@ class RuneLiteClient(GenericWindow):
     def get_inv_items(self, 
             items: List[str | int],min_confidence=0.97,
             x_sort: bool = None,
-            y_sort: bool = None
+            y_sort: bool = None,
+            do_sort: bool = True,
+            verify_tab: bool = True
         ) -> List[MatchResult]:
-        self.click_toolplane(ToolplaneTab.INVENTORY)
+        if verify_tab:
+            self.click_toolplane(ToolplaneTab.INVENTORY)
         sc = self.get_screenshot()
         tp = self.sectors.toolplane
         sc = tp.crop_in(sc)
@@ -884,16 +895,18 @@ class RuneLiteClient(GenericWindow):
             )
         if not matches:
             return []
-        if x_sort is None: x_sort = random.choice([True, False])
-        if y_sort is None: y_sort = random.choice([True, False])
-        matches.sort(
-            key=lambda x: x.start_x, 
-            reverse=x_sort
-        )
-        matches.sort(
-            key=lambda x: x.start_y, 
-            reverse=y_sort
-        )
+
+        if do_sort:
+            if x_sort is None: x_sort = random.choice([True, False])
+            if y_sort is None: y_sort = random.choice([True, False])
+            matches.sort(
+                key=lambda x: x.start_x,
+                reverse=x_sort
+            )
+            matches.sort(
+                key=lambda x: x.start_y,
+                reverse=y_sort
+            )
         matches = [m.transform(tp.start_x,tp.start_y) for m in matches]
         return matches
 
@@ -953,11 +966,11 @@ class RuneLiteClient(GenericWindow):
                     sc = match.remove_from(sc)
             if mult + 1 >= retry_match and retry_match > 1:
                 self.move_off_window()
-            match = find_color_box(
-                sc,tile_color,
-                tol=40+(10*mult)
-            )
             try:
+                match = find_color_box(
+                    sc,tile_color,
+                    tol=40+(10*mult)
+                )
                 self.smart_click_match(
                     match,
                     hover_text,

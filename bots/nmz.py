@@ -20,6 +20,7 @@ class BotConfig(BotConfigMixin):
     # Main feature toggles
     manage_health: BooleanParam = BooleanParam(True)
     manage_absorption: BooleanParam = BooleanParam(True)
+    manage_overload: BooleanParam = BooleanParam(True)
     prayer_flick: BooleanParam = BooleanParam(True)
     afk_mode: BooleanParam = BooleanParam(True)
 
@@ -61,6 +62,7 @@ class BotExecutor(Bot):
         self.cfg: BotConfig = config
         self.log = get_logger('NMZ')
         self.error_count = 0
+        self.last_overload = 0
         
     def start(self):
         self.log.info("Starting NMZ Prayer Flick Runner")
@@ -120,6 +122,10 @@ class BotExecutor(Bot):
     def flick_routine(self):
         """Main flicking routine that handles prayer, health, and absorption"""
         actions = []
+        
+        if self.cfg.manage_overload.value:
+            # this needs to be done before handle health
+            self.handle_overload()
 
         if self.cfg.prayer_flick.value:
             actions.append(self.handle_prayer_flick)
@@ -175,8 +181,15 @@ class BotExecutor(Bot):
             if not health:
                 self.log.warning("Could not read health stat")
                 return
+            
+            if health > 50 and self.cfg.manage_overload.value:
+                self.log.info('Health is quite high.. did overload not work?')
+                self.handle_overload()
+                health = self.client.get_minimap_stat(MinimapElement.HEALTH)
                 
             if health > self.cfg.target_health.value:
+                
+                    
                 self.log.info(f"Health is {health}, using rock cake to reduce to {self.cfg.target_health.value}")
                 
                 clicks_needed = min(
@@ -264,6 +277,58 @@ class BotExecutor(Bot):
                 
         except Exception as e:
             self.log.error(f"Error ensuring prayer state: {e}")
+            raise
+        
+    @control.guard
+    def get_smallest_overload(self):
+        """Get the smallest overload potion from the inventory"""
+        overload_items = [11733, 11732, 11731, 11730 ]
+        overloads = self.client.get_inv_items(
+            overload_items,
+            min_confidence=0.98,
+            do_sort=False
+        )
+        self.log.debug(f"Found overload potions: {overloads}")
+        if overloads:
+            # Return the first one found, which should be the smallest
+            return overloads[0]
+        return None
+
+    @control.guard
+    def handle_overload(self):
+        """Manage overload effects by drinking overload potions when needed"""
+        try:
+            now = time.time()
+            time_since_last = (now - self.last_overload) / 60
+            if time_since_last < 4:
+                if self.client.get_minimap_stat(MinimapElement.HEALTH) < 51:
+                    return
+                self.log.info('Health is above 50 but overload timeout hasn\'t expired.')
+                time_since_last = 5
+            overload = self.get_smallest_overload()
+            if not overload:
+                self.log.warning("No overload potion found in inventory, disabling")
+                self.cfg.manage_overload.value = False
+                return
+
+            # if less than 1 minute until overload exp, wait here
+            if time_since_last < 5:
+                self.log.info("Overload potion is about to expire, waiting...")
+                time_until_overload_exp = int((5 - time_since_last) * 60) + 1
+                time.sleep(time_until_overload_exp)
+            
+            if self.client.get_minimap_stat(MinimapElement.HEALTH) < 51:
+                self.log.info("Health is below 51, not drinking overload")
+                return
+            
+            
+            self.log.info('Drinking Overload')
+            self.client.click(overload)
+            self.last_overload = time.time()
+            time.sleep(10) # takes a while to get health down
+
+        except Exception as e:
+            self.log.error(f"Error handling overload: {e}")
             raise
 
     def wait_interruptible(self, duration: float):
