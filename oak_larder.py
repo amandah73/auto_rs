@@ -52,72 +52,48 @@ def main():
         if not planks_in_inventory():
             get_new_planks()
 
-        client.smart_click_tile(
-            PORTAL_TILE,
-            'Build'
-        )
+        try:
+            client.smart_click_tile(
+                PORTAL_TILE,
+                'Build'
+            )
+        except:
+            print('dont use an item on the portal, silly')
+            client.click_toolplane(ToolplaneTab.SKILLS)
+            client.click_toolplane(ToolplaneTab.INVENTORY)
+            client.smart_click_tile(
+                PORTAL_TILE,
+                'Build'
+            )
     
         propose_break()
         while client.is_moving(): continue
 
-        for _ in range(10): #doing more than 6 bc if it fails then it doesnt use the planks so do it again
-            if not planks_in_inventory():
-                print("emptying plank sack")
-                use_plank_sack("Empty")
-                print("looking for planks after emptying")
-                if not planks_in_inventory(): # if the sack was already empty
-                    print ("no planks in sack or inv")
-                    break
+        for _ in range(20):
             propose_break()
             if terminate: break
-            sleep(random.normalvariate(1,.1))
+            sleep(abs(random.normalvariate(.25,.1)))
+            if not planks_in_inventory(): 
+                break
+
             try:
-                print('trying to remove larder')
+                print('trying to build or remove larder')
                 client.smart_click_tile(
                     LARDER_TILE,
-                    'Remove'
+                    'Larder'
                 )
-                if terminate: break
-                while client.is_moving(): continue
-                chat_text_clicker(
-                    'Yes',
-                    'Waiting for larder'
-                )
-            except: print('larder already missing? aight')
-            time.sleep(random.normalvariate(1,.1))
-
-            
-            try:
-                print('trying to build larder')
-                client.smart_click_tile(
-                    LARDER_TILE,
-                    'Build'
-                )
-                while client.is_moving(): continue
-            except Exception as e:
-                print(e)
-                print('couldnt find build button, lets assume it got pressed')
-
-            time.sleep(random.normalvariate(1,.1))
-            match = None
-            for _ in range(3):
-                if terminate: break
-                try:
-                    match = client.find_in_window(
-                        OAK_LARDER,
-                        min_confidence=.98
-                    )
-                    break
-                except Exception as e:
-                    print(e)
-                    print('missed oak larder build btn')
-
-            if match:
-                client.click(match)
-            sleep(.4)
+                build_or_remove_larder()
+            except: 
+                print('couldnt find larder space at all. maybe build options are blocking?')
+                try: build_or_remove_larder()
+                except: print('lmao guess not')
+                        
+            sleep(abs(random.normalvariate(.5,.1)))
+            if not planks_in_inventory():
+                use_plank_sack("Empty")
             
         propose_break()
-        sleep(2)
+        sleep(abs(random.normalvariate(.25,.1)))
         try:
             client.smart_click_tile(
                 PORTAL_TILE,
@@ -135,6 +111,37 @@ def main():
     total_time = tools.seconds_to_hms(time.time() - start_time)
     print(f'Grinded for {total_time}')
     
+def build_or_remove_larder():
+    if terminate: return
+    while client.is_moving(): continue
+    # assuming building first
+    time.sleep(abs(random.normalvariate(.25,.1)))
+    match = None
+    print('trying to build rq')
+    try:
+        match = client.find_in_window(
+            OAK_LARDER,
+            min_confidence=.95
+        )
+        if match:
+            #client.click(match)
+            keyboard.press('2')
+            sleep(.1)
+    except ValueError as e:
+        # should say confidence wasnt high enough i think
+        print(e)
+        print('couldnt build. removing instead')
+        try:
+            while client.is_moving(): continue
+            keyboard.press('1')
+            # chat_text_clicker(
+            #     'Yes',
+            #     'Waiting for larder'
+            # )
+        except Exception as e:
+            print(e)
+            print('couldnt click yes either. rip')
+
 
 def get_new_planks():
     print("getting the first set of planks")
@@ -182,22 +189,13 @@ def unnote_planks(recurse=0):
             # unselect plank
             client.click_toolplane(ToolplaneTab.SKILLS)
             client.move_off_window()
-            time.sleep(random.normalvariate(3,.5))
+            time.sleep(random.normalvariate(2,.5))
             
             continue
         while client.is_moving(): continue
-        try:
-            if terminate: break
-            chat_text_clicker(
-                'Exchange All: 120 coins', 
-                'Waiting for Phials',
-                tries=4
-            )
-            done = True
-            break
-        except Exception as e: 
-            print(e)
-            print('Phials is an elusive boi')
+        keyboard.press('3')
+        done = True
+        break
     if not done:
         raise RuntimeError('Phials evaded us :(')
     time.sleep(random.normalvariate(1,.1))
@@ -208,6 +206,7 @@ def unnote_planks(recurse=0):
 def use_plank_sack(action):
     if action == "Fill":
         try:
+            print("filling sack")
             client.click_item(
                 PLANK_SACK,
                 crop=(0,13,0,0), # crop top off plank sack (count)
@@ -217,17 +216,15 @@ def use_plank_sack(action):
             print("couldn't find plank sack to fill")
     elif action == "Empty": 
         try:
-            print("pressing shift to empty sack")
+            print("emptying sack")
             keyboard.press('shift')
             client.click_item(
                 PLANK_SACK,
                 crop=(0,13,0,0), # crop top off plank sack (count)
                 min_confidence=.90
             )
-            print("releasing shift")
             keyboard.release('shift')
         except:
-            print("couldn't find plank sack to empty. releasing shift")
             keyboard.release('shift') #because we pressed it at the start and then it failed before it got released
     if keyboard.is_pressed('shift'): keyboard.release('shift')
     time.sleep(random.normalvariate(.5,.05)) # wait for plank update
@@ -269,7 +266,7 @@ def planks_in_inventory() -> bool:
         print(f'{cnt} planks in inventory')
         return cnt >= PLANK_BUILD_MIN
     except:
-        print("no planks found in inventory")
+        print("not enough planks found in inventory")
         return False
     
 def timeout_check(start):
