@@ -1,6 +1,6 @@
 from core.osrs_client import RuneLiteClient, ToolplaneTab
 from PIL import Image
-from core import tools
+from core import tools, cv_debug
 import time
 import random
 import threading
@@ -21,6 +21,7 @@ SLEEP_CHANCE = .01 #actually higher b/c this is referenced multiple times
 SLEEP_RANGE = (25,122)
 MAX_TIME_MIN = random.normalvariate(180, 30) 
 terminate = False
+cv_debug.enable()
 
 """
 Plugins: [ 'Better NPC Highlight', 'Ground Markers' ]
