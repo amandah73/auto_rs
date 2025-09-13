@@ -169,7 +169,7 @@ class WebSocketLogHandler(logging.Handler):
 # --- Function to start the WebSocket server inside a daemon thread -----------
 # ------------------------------------------------------------------------------
 
-def _start_websocket_server(host: str = "0.0.0.0", port: int = 8765) -> None:
+def _start_websocket_server(host: str = "0.0.0.0", port: int = 6765) -> None:
     """
     This function is intended to run in its own thread. It creates a new
     asyncio loop, starts a simple WebSocket server, and runs forever.
