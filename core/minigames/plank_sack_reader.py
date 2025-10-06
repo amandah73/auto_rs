@@ -20,7 +20,7 @@ import core.ocr.custom as ocr
 def read_stack(path_or_img: Union[str, Path, Image.Image]) -> str:
     """
     Return the stack size as a string (e.g. '60', '2009').
-    Raises a ValueError if *nothing* is read.
+    Returns 0 if *nothing* is read.
     """
     img   = Image.open(path_or_img) if not isinstance(path_or_img, Image.Image) else path_or_img
     
@@ -29,7 +29,8 @@ def read_stack(path_or_img: Union[str, Path, Image.Image]) -> str:
     txt = ocr.read_location_numbers(number_img)
 
     if not txt and txt != 0:
-        raise ValueError("No digits recognised – Tesseract returned an empty string.")
+        print("No digits recognised – Tesseract returned an empty string.")
+        return 0
     return int(txt)
 
 

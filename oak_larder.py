@@ -1,6 +1,7 @@
 from core.osrs_client import RuneLiteClient, ToolplaneTab
+from core.minigames.plank_sack_reader import plank_sack_cnt
 from PIL import Image
-from core import tools
+from core import tools, cv_debug
 import time
 import random
 import threading
@@ -21,6 +22,7 @@ SLEEP_CHANCE = .01 #actually higher b/c this is referenced multiple times
 SLEEP_RANGE = (25,122)
 MAX_TIME_MIN = random.normalvariate(180, 30) 
 terminate = False
+cv_debug.enable()
 
 """
 Plugins: [ 'Better NPC Highlight', 'Ground Markers' ]
@@ -49,8 +51,9 @@ def main():
 
     while not terminate:
         timeout_check(start_time)
-        if not planks_in_inventory():
-            get_new_planks()
+        unnoted_planks = len(client.get_inv_items([PLANKS], min_confidence=.95))
+        if unnoted_planks < 20:
+            unnote_planks()
 
         try:
             client.smart_click_tile(
@@ -68,12 +71,14 @@ def main():
     
         propose_break()
         while client.is_moving(): continue
+        sleep(abs(random.normalvariate(.75,.1)))
 
         for _ in range(20):
             propose_break()
             if terminate: break
             sleep(abs(random.normalvariate(.25,.1)))
-            if not planks_in_inventory(): 
+            total_planks = get_total_plank_count()
+            if total_planks < PLANK_BUILD_MIN: 
                 break
 
             try:
@@ -87,10 +92,6 @@ def main():
                 print('couldnt find larder space at all. maybe build options are blocking?')
                 try: build_or_remove_larder()
                 except: print('lmao guess not')
-                        
-            sleep(abs(random.normalvariate(.5,.1)))
-            if not planks_in_inventory():
-                use_plank_sack("Empty")
             
         propose_break()
         sleep(abs(random.normalvariate(.25,.1)))
@@ -108,6 +109,7 @@ def main():
                 'Enter'
             )
         while client.is_moving(): continue
+        sleep(abs(random.normalvariate(.5,.1)))
     total_time = tools.seconds_to_hms(time.time() - start_time)
     print(f'Grinded for {total_time}')
     
@@ -124,33 +126,13 @@ def build_or_remove_larder():
             min_confidence=.95
         )
         if match:
-            #client.click(match)
             keyboard.press('2')
             sleep(.1)
     except ValueError as e:
-        # should say confidence wasnt high enough i think
         print(e)
         print('couldnt build. removing instead')
-        try:
-            while client.is_moving(): continue
-            keyboard.press('1')
-            # chat_text_clicker(
-            #     'Yes',
-            #     'Waiting for larder'
-            # )
-        except Exception as e:
-            print(e)
-            print('couldnt click yes either. rip')
-
-
-def get_new_planks():
-    print("getting the first set of planks")
-    unnote_planks()
-    print("filling the plank sack")
-    use_plank_sack("Fill")
-    print("getting the second set of planks")
-    unnote_planks()
-
+        while client.is_moving(): continue
+        keyboard.press('1')
 
 def unnote_planks(recurse=0):
     if recurse >= 5:
@@ -168,9 +150,6 @@ def unnote_planks(recurse=0):
         )
     success = False
     for _ in range(4):
-        # seems overkill but im getting weird behavior
-        if planks_in_inventory():
-            return
         if terminate: break
         try:
             client.click_item(
@@ -212,45 +191,10 @@ def unnote_planks(recurse=0):
             client.click_toolplane(ToolplaneTab.SKILLS)
             client.move_off_window()
             time.sleep(random.normalvariate(2,.5))
-            
             continue
-        while client.is_moving(): continue
-        keyboard.press('3')
-        done = True
-        break
-    if not done:
-        raise RuntimeError('Phials evaded us :(')
     time.sleep(random.normalvariate(1,.1))
-    if not planks_in_inventory():
-        print('Apparently i didnt get planks :(')
-        unnote_planks(recurse+1)
-
-def use_plank_sack(action):
-    if action == "Fill":
-        try:
-            print("filling sack")
-            client.click_item(
-                PLANK_SACK,
-                crop=(0,13,0,0), # crop top off plank sack (count)
-                min_confidence=.90
-            )
-        except:
-            print("couldn't find plank sack to fill")
-    elif action == "Empty": 
-        try:
-            print("emptying sack")
-            keyboard.press('shift')
-            client.click_item(
-                PLANK_SACK,
-                crop=(0,13,0,0), # crop top off plank sack (count)
-                min_confidence=.90
-            )
-            keyboard.release('shift')
-        except:
-            keyboard.release('shift') #because we pressed it at the start and then it failed before it got released
-    if keyboard.is_pressed('shift'): keyboard.release('shift')
-    time.sleep(random.normalvariate(.5,.05)) # wait for plank update
-    return
+    if success: unnote_planks(0)
+    else: unnote_planks(recurse+1)
 
 def chat_text_clicker(text,wait_msg,wait=.5,tries=8):
     done = False
@@ -266,9 +210,15 @@ def chat_text_clicker(text,wait_msg,wait=.5,tries=8):
     if not done:
         raise RuntimeError(f'Could not find chat text {text}')
     
-def get_plank_count() -> int:
-    matches = client.get_inv_items([PLANKS], min_confidence=.95)
-    return len(matches)
+def get_total_plank_count() -> int:
+    sleep(.1)
+    unnoted = len(client.get_inv_items([PLANKS], min_confidence=.95))
+    print(f'{unnoted} unnoted planks')
+    planks_in_sack = plank_sack_cnt(client.get_screenshot())
+    print(f'{planks_in_sack} planks in sack')
+    total = unnoted + planks_in_sack
+    print(f'{total} total planks')
+    return total
 
 def propose_break():
     if random.random() < SLEEP_CHANCE:
@@ -281,23 +231,12 @@ def sleep(base_time):
     mult = random.uniform(1.0,1.3)
     time.sleep(base_time*mult)
     
-def planks_in_inventory() -> bool:
-    time.sleep(.25)
-    try:
-        cnt = get_plank_count()
-        print(f'{cnt} planks in inventory')
-        return cnt >= PLANK_BUILD_MIN
-    except:
-        print("not enough planks found in inventory")
-        return False
-    
 def timeout_check(start):
     runtime = time.time() - start
     if runtime/60 > MAX_TIME_MIN:
         raise RuntimeError('MAX TIME LIMIT EXCEEDED')
 
 def init():
-
     print(f'initializing bot {__file__}')
     threading.Thread(target=listen_for_escape, daemon=True).start()
 

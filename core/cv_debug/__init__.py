@@ -20,7 +20,7 @@ _started = False
 _lock = threading.Lock()
 
 # Ring buffer of last N items
-_MAX_ITEMS = 20
+_MAX_ITEMS = 100
 _items: deque[Dict[str, Any]] = deque(maxlen=_MAX_ITEMS)
 
 # Task queue for the worker thread (drop if full to avoid slowing main)
