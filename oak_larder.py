@@ -140,6 +140,14 @@ def unnote_planks(recurse=0):
     total_planks = get_total_plank_count()
     if total_planks > 40:
         return
+    planks_in_sack = plank_sack_cnt(client.get_screenshot())
+    unnoted = len(client.get_inv_items([PLANKS], min_confidence=.95))
+    if planks_in_sack == 0 and unnoted > 0:
+        client.click_item(
+            PLANK_SACK,
+            crop=(0,13,0,0), # crop top off plank sack (count)
+            min_confidence=.90
+        )
     success = False
     for _ in range(4):
         if terminate: break
@@ -167,13 +175,14 @@ def unnote_planks(recurse=0):
             )
             while client.is_moving(): continue
             keyboard.press('3')
-            planks_in_sack = plank_sack_cnt(client.get_screenshot())
-            if planks_in_sack == 0:
-                client.click_item(
-                    PLANK_SACK,
-                    crop=(0,13,0,0), # crop top off plank sack (count)
-                    min_confidence=.90
-                )
+            # planks_in_sack = plank_sack_cnt(client.get_screenshot())
+            # unnoted = len(client.get_inv_items([PLANKS], min_confidence=.95))
+            # if planks_in_sack == 0 and unnoted > 0:
+            #     client.click_item(
+            #         PLANK_SACK,
+            #         crop=(0,13,0,0), # crop top off plank sack (count)
+            #         min_confidence=.90
+            #     )
             success = True
             break
         except:
