@@ -155,7 +155,18 @@ def get_new_planks():
 def unnote_planks(recurse=0):
     if recurse >= 5:
         raise ValueError('WTF Phails??')
-    done = False
+    total_planks = get_total_plank_count()
+    if total_planks > 40:
+        return
+    planks_in_sack = plank_sack_cnt(client.get_screenshot())
+    unnoted = len(client.get_inv_items([PLANKS], min_confidence=.95))
+    if planks_in_sack == 0 and unnoted > 0:
+        client.click_item(
+            PLANK_SACK,
+            crop=(0,13,0,0), # crop top off plank sack (count)
+            min_confidence=.90
+        )
+    success = False
     for _ in range(4):
         # seems overkill but im getting weird behavior
         if planks_in_inventory():
@@ -183,7 +194,18 @@ def unnote_planks(recurse=0):
                 retry_hover=2,
                 retry_match=10
             )
-            
+            while client.is_moving(): continue
+            keyboard.press('3')
+            # planks_in_sack = plank_sack_cnt(client.get_screenshot())
+            # unnoted = len(client.get_inv_items([PLANKS], min_confidence=.95))
+            # if planks_in_sack == 0 and unnoted > 0:
+            #     client.click_item(
+            #         PLANK_SACK,
+            #         crop=(0,13,0,0), # crop top off plank sack (count)
+            #         min_confidence=.90
+            #     )
+            success = True
+            break
         except:
             print('phials match miss')
             # unselect plank
