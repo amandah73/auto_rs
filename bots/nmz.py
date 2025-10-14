@@ -5,6 +5,7 @@ from core.control import ScriptControl, ScriptTerminationException
 from core.osrs_client import MinimapElement, ToolplaneTab
 from core.logger import get_logger
 import core.minigames.nmz_pot_reader as nmz_pot_reader
+from core import tools
 
 import random
 import time
@@ -177,7 +178,7 @@ class BotExecutor(Bot):
             raise
 
     @control.guard
-    def handle_health(self):
+    def handle_health(self, match: tools.MatchResult = None):
         """Manage health by using rock cake to maintain target health level"""
         try:
             health = self.client.get_minimap_stat(MinimapElement.HEALTH)
@@ -198,22 +199,26 @@ class BotExecutor(Bot):
                 
                 clicks_needed = min(
                     health - self.cfg.target_health.value,
-                    self.cfg.max_rock_cake_clicks.value
+                    self.cfg.max_rock_cake_clicks.value + random.randint(-2,2)
                 )
                 
                 try:
-                    self.client.click_item(
-                        self.cfg.rock_cake_name.value,
+                    if not match:
+                        match = self.client.find_item(
+                            self.cfg.rock_cake_name.value,
+                            min_confidence=self.cfg.rock_cake_confidence.value
+                        )
+                    self.client.click(
+                        match,
                         click_cnt=clicks_needed,
                         min_click_interval=self.cfg.rock_cake_click_interval.value,
-                        min_confidence=self.cfg.rock_cake_confidence.value
                     )
                     
                     # Wait for health to update
                     time.sleep(0.5)
                     
                     # Recursively check if we need more clicks
-                    self.handle_health()
+                    self.handle_health(match)
                     
                 except ValueError:
                     self.log.warning(f"Rock cake '{self.cfg.rock_cake_name.value}' not found in inventory")
@@ -286,6 +291,9 @@ class BotExecutor(Bot):
     @control.guard
     def get_smallest_overload(self):
         """Get the smallest overload potion from the inventory"""
+        
+        self.client.click_toolplane(ToolplaneTab.INVENTORY)
+        
         overload_items = [11733, 11732, 11731, 11730 ]
         overloads = self.client.get_inv_items(
             overload_items,

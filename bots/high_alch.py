@@ -89,7 +89,7 @@ class BotExecutor(Bot):
             
             self.overlap_point = self.overlap.get_point_within()
             self.log.info(f'New Overlap point: {self.overlap_point}')
-        except AttributeError as e:
+        except AttributeError:
             raise RuntimeError('Make sure the item and high alch are on top of each other')
         
     

@@ -14,6 +14,7 @@ if __name__ == "__main__":
     )
 import ctypes, math, random, time
 import pyautogui, keyboard
+from core.logger import get_logger
 from core.tools import MatchResult          # your class
 from core.control import ScriptControl
 from enum import Enum
@@ -21,6 +22,7 @@ from typing import Tuple
 
 pyautogui.FAILSAFE = False
 control = ScriptControl()
+log = get_logger("MouseControl")
 
 class ClickType(Enum):
     LEFT = 1
@@ -121,7 +123,10 @@ def _constrain_travel(p1: Tuple[float, float],
 def click(
         x=-1, y=-1, 
         click_type=ClickType.LEFT,
-        click_cnt=1, min_click_interval=.3):
+    click_cnt=1, min_click_interval=.3,
+    verify: bool = True,
+    verify_tolerance: int = 3,
+    verify_corrections: int = 2):
     def _do_click():
         time.sleep(random.uniform(.05, .15))
         duration = random.uniform(.05, .25)
@@ -138,9 +143,15 @@ def click(
         if x >= 0 and y >= 0 and not is_already_there:
             move_to(x, y)
 
+        # Optional verification & correction before first click
+        if verify and x >= 0 and y >= 0:
+            _verify_position((x, y), tolerance=verify_tolerance, corrections=verify_corrections)
+
         _do_click()
-        for _ in range(click_cnt-1):
+        for idx in range(click_cnt-1):
             time.sleep(random.uniform(min_click_interval, min_click_interval*1.4))
+            if verify and x >= 0 and y >= 0:
+                _verify_position((x, y), tolerance=verify_tolerance, corrections=verify_corrections)
             _do_click()
     finally:
         _block(False)
@@ -183,7 +194,10 @@ def move_to(
 
     pause_max_ms=250,
     speed: float | None = None,
-    max_direction_change=30 # max change from point to point
+    max_direction_change=30, # max change from point to point
+    verify_at_end: bool = True,
+    verify_tolerance: int = 3,
+    verify_corrections: int = 2
 ):
     """Smooth cursor travel with human quirks."""
     if terminate:
@@ -377,7 +391,54 @@ def move_to(
             prev = wp
             
     finally:
+        # Post-move verification (outside the inner movement logic but while blocked)
+        try:
+            if verify_at_end:
+                _verify_position((tx, ty), tolerance=verify_tolerance, corrections=verify_corrections)
+        except Exception as e:
+            # Never allow verification failure to break caller
+            log.error(f"Mouse position verification raised unexpected error: {e}")
         _block(False)
+
+def _verify_position(target: tuple[int,int], tolerance: int = 3, corrections: int = 2) -> bool:
+    """Ensure the physical cursor is within tolerance of target.
+
+    Attempts lightweight corrective moves if outside tolerance.
+    Returns True if within tolerance after any corrections, else False.
+    """
+    try:
+        curr = pyautogui.position()
+    except Exception as e:
+        log.error(f"Unable to read mouse position for verification: {e}")
+        return False
+
+    dist = _euclidean(curr, target)
+    if dist <= tolerance:
+        #log.debug(f"Mouse on target {target} (Δ={dist:.1f}px ≤ {tolerance})")
+        return True
+
+    for attempt in range(1, corrections+1):
+        log.warning(f"Mouse off target by {dist:.1f}px (expected {target}, got {curr}); correcting (attempt {attempt}/{corrections})")
+        try:
+            # Direct small correction; avoid full humanized path to reduce drift loops
+            pyautogui.moveTo(target[0], target[1], _pause=0)
+            time.sleep(random.uniform(0.008, 0.02))
+        except Exception as e:
+            log.error(f"Correction attempt {attempt} failed: {e}")
+            break
+        try:
+            curr = pyautogui.position()
+        except Exception as e:
+            log.error(f"Failed to read mouse after correction: {e}")
+            break
+        dist = _euclidean(curr, target)
+        if dist <= tolerance:
+            log.info(f"Mouse corrected to target {target} after {attempt} attempt(s) (Δ={dist:.1f}px)")
+            return True
+
+    # Final state
+    log.error(f"Mouse failed to reach target {target}; final position {curr} (Δ={dist:.1f}px > {tolerance})")
+    return False
 
 # ────────────────────────────────────────────────────────────────
 #  RANDOM DOUBLE-CLICK  (unchanged)
