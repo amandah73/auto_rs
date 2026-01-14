@@ -214,6 +214,11 @@ class BotExecutor(Bot):
                         min_click_interval=self.cfg.rock_cake_click_interval.value,
                     )
                     
+                    # Move off window to recover from potential UI issues
+                    if self.cfg.afk_mode.value:
+                        self.client.move_off_window()
+
+                    
                     # Wait for health to update
                     time.sleep(0.5)
                     
